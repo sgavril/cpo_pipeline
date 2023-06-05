@@ -7,7 +7,7 @@ process fastQC {
     publishDir "${params.output_dir}/fastqc_output", mode:'copy'
 
     input:
-        file(fastq) from fastqc_ch
+        file(fastq)
 
     output:
         file("*") into fastqc_files
@@ -21,6 +21,9 @@ process fastQC {
 }
 
 workflow {
-    fastqc_ch = Channel.fromPath("${params.input_dir}/*.fastq")
+    Channel
+        .fromPath("${params.input_dir}/*.fastq")
+        .set { fastqc_ch }
+
     fastQC(fastqc_ch)
 }
