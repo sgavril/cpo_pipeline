@@ -21,7 +21,9 @@ mv nextflow miniconda3/bin
 pip install mob_suite chewBBACA
 ```
 - run mobsuite using `mob_recon --infile assembly.fasta --outdir mobsuite_output`
-- run chewbbaca using 
+- Run a typical chewBBACA workflow:
 ```
-
+chewBBACA.py CreateSchema -i ~/silas_cpo/ -o chewbbaca_output 
+chewBBACA.py AlleleCall -i ~/silas_cpo/ -g  chewbbaca_output/ -o chewbbaca_output/ 
+chewBBACA.py ExtractCgMLST -i ~/silas_cpo/ -o chewbbaca_output/ 
 ```
