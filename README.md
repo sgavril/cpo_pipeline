@@ -13,6 +13,11 @@ chmod +x netflow
 mv nextflow miniconda3/bin
 ```
 
+### Running the nextflow pipeline
+```
+nextflow run cpo.nf
+```
+
 ### Notes on mobsuite and chewbacca
 - mobsuite conflicts with current `CPO_comparativegenomics` env, so create a new one with the appropriate version of pandas: 
 `mamba create -n mob_suite_env -c bioconda -c conda-forge mobsuite "pandas<=1.0.5" chewbbaca` , then `conda activate mob_suite_env` 
