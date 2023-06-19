@@ -1,112 +1,56 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-params.input_dir = "/home/sgav/silas_cpo/illumina_seq/"
+//params.input_dir = "/home/sgav/silas_cpo/illumina_seq/"
+params.raw = "/home/sgav/silas_cpo/illumina_seq/*_{1,2}.fastq.gz"
 params.output_dir = "/home/sgav/silas_cpo/nf_out/"
 params.kraken2_db = "/home/srotich/CPO_Analysis/minikraken2_db/minikraken2_v2_8GB_201904_UPDATE"
+params.adapter_removed = "/home/sgav/silas_cpo/nf_out/adapter_removed"
 
 
-shell:
-"""
-mkdir -p ${params.output_dir}
-"""
+reads_ch = Channel.fromFilePairs(params.raw, checkIfExists: true )
 
-fastq_ch1 = Channel.fromPath("${params.input_dir}/*_1.fastq.gz").map { file -> tuple(file.baseName.replaceAll(/_1$/, ''), file) }
-fastq_ch2 = Channel.fromPath("${params.input_dir}/*_2.fastq.gz").map { file -> tuple(file.baseName.replaceAll(/_2$/, ''), file) }
+process QC1 {
+    publishDir "${params.output_dir}", mode: 'copy'
 
-fastq_pairs_ch = fastq_ch1.join(fastq_ch2)
-
-process FastQC1 {
     input:
-    tuple val(sample), path(r1)
+    tuple val(sample_id), path(reads)
 
     output:
-    tuple val("${reads}_1.fastq"), file("${reads}_1.fastq.gz"), file("${reads}_1_fastqc.html"), file("${reads}_1_fastqc.zip") into fastqc1_out
+    tuple val(sample_id), path("fastqc_out")
 
     script:
     """
+    mkdir fastqc_out
     source activate /home/srotich/miniconda3/envs/cpo_preprocess
-    fastqc $r1
+    fastqc -t 10 -o fastqc_out ${reads[0]} ${reads[1]}
+    multiqc -f fastqc_out -o fastqc_out
     """
 }
 
-process Fastp {
+process FASTP {
+    publishDir "${params.adapter_removed}", mode: 'copy'
+
     input:
-    tuple val(sample), path(r1), path(r2)
+    tuple val(sample_id), path(reads)
 
     output:
-    tuple val(sample), path("${sample}_fastp_1.fastq.gz"), path("${sample}_fastp_2.fastq.gz"), path("${sample}_fastp_report.html"), path("${sample}_fastp_report.json"), emit: fastp_out
-
-    script:
-    """
-    echo "Running fastp on files: $r1 and $r2"
-    source activate /home/srotich/miniconda3/envs/cpo_preprocess
-    fastp -i $r1 -I $r2 -o ${sample}_fastp_1.fastq.gz -O ${sample}_fastp_2.fastq.gz -h ${sample}_fastp_report.html -j ${sample}_fastp_report.json
-    """
-}
-
-process FastQC2 {
-    input:
-    tuple val(sample), path(fastp_r1), path(fastp_r2), path(fastp_html), path(fastp_json)
-
-    output:
-    tuple val(sample), path("*.html"), path("*.zip"), emit: qc2
+    tuple val(sample_id), path("fastp_out")
 
     script:
     """
     source activate /home/srotich/miniconda3/envs/cpo_preprocess
-    fastqc $fastp_r1 $fastp_r2
-    """
-}
-
-process MultiQC {
-    input:
-    path qc_files
-
-    output:
-    path("*"), emit: multiqc_out
-
-    script:
-    """
-    source activate /home/srotich/miniconda3/envs/cpo_preprocess
-    multiqc .
-    """
-}
-
-process Kraken2 {
-    input:
-    tuple val(sample), path(fastp_r1), path(fastp_r2)
-
-    output:
-    path("*.report"), emit: kraken_out
-
-    script:
-    """
-    source activate /home/srotich/miniconda3/envs/cpo_preprocess
-    kraken2 --db ${params.kraken2_db} --paired $fastp_r1 $fastp_r2 --report ${sample}.report
-    """
-}
-
-process Krona {
-    input:
-    path reports
-
-    output:
-    path("*.html"), emit: krona_out
-
-    script:
-    """
-    source activate /home/srotich/miniconda3/envs/cpo_preprocess
-    ktImportTaxonomy -q 1 -t 2 -o krona_output.html $reports
+    fastp --in1 ${reads[0]} --in2 ${reads[1]} --out1 ${sample_id}_1.fastq.gz --out2 ${sample_id}_2.fastq.gz
     """
 }
 
 workflow {
-    fastqc1_out = FastQC1(fastq_ch1)
-    fastqc1_out.qc1.view()
-    fastp_out = Fastp(fastqc1_out.qc1.join(fastq_ch2))
-    fastqc2_out = FastQC2(fastp_out.fastp_out)
-    multiqc_out = MultiQC(fastqc2_out.qc2.collect())
-    kraken_out = Kraken2(fastp_out.fastp_out)
-    Krona(kraken_out.kraken_out)
+    fastqc1_out = QC1(reads_ch)
+    fastp_out = FASTP(reads_ch)
+    //fastqc1_out.qc1.view()
+    //fastp_out = Fastp(fastqc1_out.qc1.join(fastq_ch2))
+    //fastqc2_out = FastQC2(fastp_out.fastp_out)
+    //multiqc_out = MultiQC(fastqc2_out.qc2.collect())
+    //kraken_out = Kraken2(fastp_out.fastp_out)
+    //Krona(kraken_out.kraken_out)
 }
